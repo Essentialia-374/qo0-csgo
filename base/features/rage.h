@@ -7,6 +7,7 @@
 #include "../sdk/entity.h"
 
 #include "../utilities/math.h"
+#include "../sdk/interfaces/ivmodelinfo.h"
 
 #define MAX_SEEDS 128
 
@@ -16,6 +17,17 @@
  */
 namespace F::RAGE
 {
+    using RageHitbox_t = int;
+
+    enum ERageHitbox : RageHitbox_t
+    {
+        RAGE_HITBOX_HEAD = HITBOX_HEAD,
+        RAGE_HITBOX_NECK = HITBOX_NECK,
+        RAGE_HITBOX_CHEST = HITBOX_CHEST,
+        RAGE_HITBOX_STOMACH = HITBOX_STOMACH,
+        RAGE_HITBOX_PELVIS = HITBOX_PELVIS,
+        RAGE_HITBOX_MAX = HITBOX_MAX
+    };
     /* @section: callbacks */
     void OnMove(CCSPlayer* pLocal, CUserCmd* pCmd, bool* pbSendPacket);
 
@@ -26,5 +38,5 @@ namespace F::RAGE
 
     void NoRecoil(CCSPlayer* pLocal, CUserCmd* pCmd);
 
-    float Hitchance(CCSPlayer* pLocal, CBaseCombatWeapon* pWeapon, const QAngle_t& angShoot, CCSPlayer* pTarget, int iTargetHitbox);
+    float Hitchance(CCSPlayer* pLocal, CBaseCombatWeapon* pWeapon, const QAngle_t& angShoot, CCSPlayer* pTarget, RageHitbox_t nTargetHitbox);
 }
