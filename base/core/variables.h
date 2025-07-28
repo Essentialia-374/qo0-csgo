@@ -4,6 +4,7 @@
 
 // used: c_add_variable
 #include "config.h"
+#include "../sdk/interfaces/ivmodelinfo.h"
 
 #pragma region variables_multi_entries
 using VisualOverlayPlayerFlags_t = unsigned int;
@@ -63,8 +64,9 @@ enum EVisualChams : VisualChams_t
 struct Variables_t
 {
 	#pragma region variables_rage
-	/* @section: aimbot */
-	C_ADD_VARIABLE(bool, bRage, false);
+        /* @section: aimbot */
+        C_ADD_VARIABLE(bool, bRage, false);
+        C_ADD_VARIABLE(int, iRageHitbox, HITBOX_HEAD);
 
 	/* @section: antiaim */
 	C_ADD_VARIABLE(bool, bAntiAim, false);

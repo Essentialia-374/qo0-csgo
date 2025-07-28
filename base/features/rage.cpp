@@ -47,7 +47,7 @@ void RAGE::NoRecoil(CCSPlayer* pLocal, CUserCmd* pCmd)
     pCmd->angViewPoint -= pLocal->GetLocalData()->GetAimPunch() * CONVAR::weapon_recoil_scale->GetFloat();
 }
 
-float RAGE::Hitchance(CCSPlayer* pLocal, CBaseCombatWeapon* pWeapon, const QAngle_t& angShoot, CCSPlayer* pTarget, int iTargetHitbox /* = HITBOX_HEAD */)
+float RAGE::Hitchance(CCSPlayer* pLocal, CBaseCombatWeapon* pWeapon, const QAngle_t& angShoot, CCSPlayer* pTarget, RageHitbox_t nTargetHitbox)
 {
     if (!pLocal || !pWeapon || !pTarget || !pTarget->IsAlive())
         return 0.0f;
@@ -64,7 +64,7 @@ float RAGE::Hitchance(CCSPlayer* pLocal, CBaseCombatWeapon* pWeapon, const QAngl
     M::AngleVectors(angShoot, &vForward, &vRight, &vUp);
 
     const Vector_t vEyePos = pLocal->GetEyePosition();
-    const Vector_t vHitBoxCentre = pTarget->GetHitboxPosition(iTargetHitbox);
+    const Vector_t vHitBoxCentre = pTarget->GetHitboxPosition(nTargetHitbox);
     const float flRange = pData->flRange;
 
     int nHits = 0;
@@ -171,7 +171,7 @@ void RAGE::AimBot(CCSPlayer* pLocal, CUserCmd* pCmd, bool* pbSendPacket)
         if (!pEnemy->IsAlive() || pEnemy->IsDormant() || !pLocal->IsOtherEnemy(pEnemy))
             continue;
 
-        const Vector_t vecTarget = pEnemy->GetHitboxPosition(HITBOX_HEAD);
+        const Vector_t vecTarget = pEnemy->GetHitboxPosition(static_cast<ERageHitbox>(C::Get<int>(Vars.iRageHitbox)));
         const float flFov = M::GetFov(angView, vecEyePos, vecTarget);
 
         if (flFov < flBestFov)
@@ -199,7 +199,7 @@ void RAGE::AimBot(CCSPlayer* pLocal, CUserCmd* pCmd, bool* pbSendPacket)
          *     • returns [0‒1] probability of a hit with current spread
          *     • we demand at least 70 % before pressing IN_ATTACK
          * ---------------------------------------------------------------- */
-        const float flHitProb = Hitchance(pLocal, pWeapon, angBest, pBestEnemy, HITBOX_HEAD);
+        const float flHitProb = Hitchance(pLocal, pWeapon, angBest, pBestEnemy, static_cast<RageHitbox_t>(C::Get<int>(Vars.iRageHitbox)));
 
         if (flHitProb >= kHitChanceThreshold)
             pCmd->nButtons |= IN_ATTACK;
