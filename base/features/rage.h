@@ -7,7 +7,6 @@
 #include "../sdk/entity.h"
 
 #include "../utilities/math.h"
-#include "../sdk/interfaces/ivmodelinfo.h"
 
 #define MAX_SEEDS 128
 
@@ -28,6 +27,7 @@ namespace F::RAGE
         RAGE_HITBOX_PELVIS = HITBOX_PELVIS,
         RAGE_HITBOX_MAX = HITBOX_MAX
     };
+
     /* @section: callbacks */
     void OnMove(CCSPlayer* pLocal, CUserCmd* pCmd, bool* pbSendPacket);
 
@@ -36,7 +36,21 @@ namespace F::RAGE
     /* @section: main */
     void AimBot(CCSPlayer* pLocal, CUserCmd* pCmd, bool* pbSendPacket);
 
+   /*  Build an array of world–space points that will be scanned on a given
+    *  enemy hit‑box.  The function always returns at least the box centre and
+    *  then – depending on `flPointScale` – additional cardinal / diagonal
+    *  points that sit on the surface of the hit‑box capsule.
+    *
+    *  @param pTarget        – player we are generating points for
+    *  @param iHitbox        – CS / Rage hit‑box id (HITBOX_HEAD …)
+    *  @param flPointScale   – 0‒1, how far from the centre extra points are
+    *  @return std::vector   – ready‑to‑trace points in world space
+    */
+    std::vector<Vector_t> MultiPoints(CCSPlayer* pTarget, RageHitbox_t iHitbox, float flPointScale = 0.75f);
+
     void NoRecoil(CCSPlayer* pLocal, CUserCmd* pCmd);
 
-    float Hitchance(CCSPlayer* pLocal, CBaseCombatWeapon* pWeapon, const QAngle_t& angShoot, CCSPlayer* pTarget, RageHitbox_t nTargetHitbox);
+    float Hitchance(CCSPlayer* pLocal, CBaseCombatWeapon* pWeapon, const QAngle_t& angShoot, CCSPlayer* pTarget, int iTargetHitbox);
+
+    void UpdateHitboxes(std::vector<RageHitbox_t>& hitboxes, CBaseCombatWeapon* pWeapon);
 }
