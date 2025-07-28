@@ -47,7 +47,7 @@ void RAGE::NoRecoil(CCSPlayer* pLocal, CUserCmd* pCmd)
     pCmd->angViewPoint -= pLocal->GetLocalData()->GetAimPunch() * CONVAR::weapon_recoil_scale->GetFloat();
 }
 
-float RAGE::Hitchance(CCSPlayer* pLocal, CBaseCombatWeapon* pWeapon, const QAngle_t& angShoot, CCSPlayer* pTarget, RageHitbox_t nTargetHitbox)
+float RAGE::Hitchance(CCSPlayer* pLocal, CBaseCombatWeapon* pWeapon, const QAngle_t& angShoot, CCSPlayer* pTarget, int iTargetHitbox /* = HITBOX_HEAD */)
 {
     if (!pLocal || !pWeapon || !pTarget || !pTarget->IsAlive())
         return 0.0f;
@@ -64,7 +64,7 @@ float RAGE::Hitchance(CCSPlayer* pLocal, CBaseCombatWeapon* pWeapon, const QAngl
     M::AngleVectors(angShoot, &vForward, &vRight, &vUp);
 
     const Vector_t vEyePos = pLocal->GetEyePosition();
-    const Vector_t vHitBoxCentre = pTarget->GetHitboxPosition(nTargetHitbox);
+    const Vector_t vHitBoxCentre = pTarget->GetHitboxPosition(iTargetHitbox);
     const float flRange = pData->flRange;
 
     int nHits = 0;
@@ -139,9 +139,126 @@ float RAGE::Hitchance(CCSPlayer* pLocal, CBaseCombatWeapon* pWeapon, const QAngl
     return static_cast<float>(nHits) / static_cast<float>(MAX_SEEDS);
 }
 
-#pragma endregion
+void RAGE::UpdateHitboxes(std::vector<RageHitbox_t>& hitboxes, CBaseCombatWeapon* pWeapon)
+{
+    hitboxes.clear();
+    if (!pWeapon)
+        return;
 
-#pragma region rage_main
+    const ItemDefinitionIndex_t nIndex = pWeapon->GetEconItemView()->GetItemDefinitionIndex();
+    if (nIndex == WEAPON_TASER)
+    {
+        hitboxes.emplace_back(HITBOX_STOMACH);
+        hitboxes.emplace_back(HITBOX_PELVIS);
+        return;
+    }
+
+    const RageHitboxFlags_t nFlags = C::Get<RageHitboxFlags_t>(Vars.nRageHitbox);
+
+    if (nFlags & RAGE_HITBOX_FLAG_HEAD)
+        hitboxes.emplace_back(HITBOX_HEAD);
+
+    if (nFlags & RAGE_HITBOX_FLAG_CHEST)
+        hitboxes.emplace_back(HITBOX_CHEST);
+
+    if (nFlags & RAGE_HITBOX_FLAG_STOMACH)
+        hitboxes.emplace_back(HITBOX_STOMACH);
+
+    if (nFlags & RAGE_HITBOX_FLAG_PELVIS)
+        hitboxes.emplace_back(HITBOX_PELVIS);
+
+    if (nFlags & RAGE_HITBOX_FLAG_ARMS)
+    {
+        hitboxes.emplace_back(HITBOX_LEFT_UPPER_ARM);
+        hitboxes.emplace_back(HITBOX_RIGHT_UPPER_ARM);
+    }
+
+    if (nFlags & RAGE_HITBOX_FLAG_LEGS)
+    {
+        hitboxes.emplace_back(HITBOX_LEFT_FOOT);
+        hitboxes.emplace_back(HITBOX_RIGHT_FOOT);
+    }
+}
+
+std::vector<Vector_t> RAGE::MultiPoints(CCSPlayer* pTarget, RageHitbox_t iHitbox, float flPointScale /* = 0.75f */)
+{
+    std::vector<Vector_t> pts;
+
+    /* sanity & data fetch */
+    if (!pTarget || !pTarget->IsAlive())
+        return pts;
+
+    const Model_t* pModel = pTarget->GetModel();
+    if (!pModel)
+        return pts;
+
+    studiohdr_t* pHdr = I::ModelInfo->GetStudioModel(pModel);
+    if (!pHdr)
+        return pts;
+
+    const mstudiobbox_t* pBox = pHdr->pHitbox(static_cast<int>(iHitbox), pTarget->GetHitboxSet());
+    if (!pBox)
+        return pts;
+
+    /* obtain up‑to‑date bone matrices – use existing bone‑setup hook   */
+    Matrix3x4a_t bones[MAXSTUDIOBONES];
+    if (!pTarget->SetupBones(bones, MAXSTUDIOBONES,
+        BONE_USED_BY_HITBOX, I::Globals->flCurrentTime))
+        return pts;
+
+    const Matrix3x4a_t& m = bones[pBox->iBone];
+
+    // Centre point (always)
+    Vector_t vMinsW, vMaxsW;
+    M::VectorTransform(pBox->vecBBMin, m, &vMinsW);
+    M::VectorTransform(pBox->vecBBMax, m, &vMaxsW);
+
+    const Vector_t vCenter = (vMinsW + vMaxsW) * 0.5f;
+    pts.emplace_back(vCenter);
+
+    // Surface points (scaled by flPointScale)
+    /* Bone local basis – already orthonormal */
+    Vector_t axX(m[0][0], m[0][1], m[0][2]);
+    Vector_t axY(m[1][0], m[1][1], m[1][2]);
+    Vector_t axZ(m[2][0], m[2][1], m[2][2]);
+
+    /*  Real radius of the hitbox capsule; for non‑capsules fall back to
+        half–extent on each axis                                              */
+    const Vector_t vExt = (pBox->vecBBMax - pBox->vecBBMin) * 0.5f;
+
+    const float rX = (pBox->flCapsuleRadius > 0.f ? pBox->flCapsuleRadius : vExt.x) * flPointScale;
+    const float rY = (pBox->flCapsuleRadius > 0.f ? pBox->flCapsuleRadius : vExt.y) * flPointScale;
+    const float rZ = (pBox->flCapsuleRadius > 0.f ? pBox->flCapsuleRadius : vExt.z) * flPointScale;
+
+    /* ± cardinal axes */
+    pts.emplace_back(vCenter + axX * rX);
+    pts.emplace_back(vCenter - axX * rX);
+    pts.emplace_back(vCenter + axY * rY);
+    pts.emplace_back(vCenter - axY * rY);
+    pts.emplace_back(vCenter + axZ * rZ);
+    pts.emplace_back(vCenter - axZ * rZ);
+
+    /*  Extra diagonals for the head – useful against peeking “edgers”  */
+    if (iHitbox == HITBOX_HEAD)
+    {
+        const float rDiag = (pBox->flCapsuleRadius > 0.f ? pBox->flCapsuleRadius : vExt.Length()) *
+            flPointScale * 0.70710678f;          // 1/√2
+
+        const auto AddDiag = [&](const Vector_t& dir)
+            {
+                pts.emplace_back(vCenter + dir.Normalized() * rDiag);
+            };
+
+        AddDiag(axX + axY);
+        AddDiag(-axX + axY);
+        AddDiag(axX - axY);
+        AddDiag(-axX - axY);
+    }
+
+    return pts;
+}
+
+#pragma endregion
 
 void RAGE::AimBot(CCSPlayer* pLocal, CUserCmd* pCmd, bool* pbSendPacket)
 {
@@ -162,7 +279,12 @@ void RAGE::AimBot(CCSPlayer* pLocal, CUserCmd* pCmd, bool* pbSendPacket)
     QAngle_t  angBest{ };
     CCSPlayer* pBestEnemy = nullptr;
 
-    // Target‑selection loop 
+    std::vector<RageHitbox_t> vecHitboxes;
+    UpdateHitboxes(vecHitboxes, pWeapon);
+
+    RageHitbox_t nBestHitbox = HITBOX_HEAD;
+
+    // Target‑selection loop
     for (int i = 1; i <= I::Globals->nMaxClients; ++i)
     {
         CCSPlayer* pEnemy = I::ClientEntityList->Get<CCSPlayer>(i);
@@ -171,16 +293,20 @@ void RAGE::AimBot(CCSPlayer* pLocal, CUserCmd* pCmd, bool* pbSendPacket)
         if (!pEnemy->IsAlive() || pEnemy->IsDormant() || !pLocal->IsOtherEnemy(pEnemy))
             continue;
 
-        const Vector_t vecTarget = pEnemy->GetHitboxPosition(static_cast<ERageHitbox>(C::Get<int>(Vars.iRageHitbox)));
-        const float flFov = M::GetFov(angView, vecEyePos, vecTarget);
-
-        if (flFov < flBestFov)
+        for (const RageHitbox_t nHitbox : vecHitboxes)
         {
-            flBestFov = flFov;
-            pBestEnemy = pEnemy;
+            const Vector_t vecTarget = pEnemy->GetHitboxPosition(static_cast<EHitboxIndex>(nHitbox));
+            const float flFov = M::GetFov(angView, vecEyePos, vecTarget);
 
-            angBest = (vecTarget - vecEyePos).ToAngles();
-            angBest.Normalize();
+            if (flFov < flBestFov)
+            {
+                flBestFov = flFov;
+                pBestEnemy = pEnemy;
+                nBestHitbox = nHitbox;
+
+                angBest = (vecTarget - vecEyePos).ToAngles();
+                angBest.Normalize();
+            }
         }
     }
 
@@ -199,7 +325,7 @@ void RAGE::AimBot(CCSPlayer* pLocal, CUserCmd* pCmd, bool* pbSendPacket)
          *     • returns [0‒1] probability of a hit with current spread
          *     • we demand at least 70 % before pressing IN_ATTACK
          * ---------------------------------------------------------------- */
-        const float flHitProb = Hitchance(pLocal, pWeapon, angBest, pBestEnemy, static_cast<RageHitbox_t>(C::Get<int>(Vars.iRageHitbox)));
+        const float flHitProb = Hitchance(pLocal, pWeapon, angBest, pBestEnemy, nBestHitbox);
 
         if (flHitProb >= kHitChanceThreshold)
             pCmd->nButtons |= IN_ATTACK;
