@@ -6,6 +6,10 @@
 // used: ccsplayer
 #include "../sdk/entity.h"
 
+#include "../utilities/math.h"
+
+#define MAX_SEEDS 128
+
 /*
  * RAGE
  * - strong assistance to the user against other cheaters
@@ -21,4 +25,6 @@ namespace F::RAGE
     void AimBot(CCSPlayer* pLocal, CUserCmd* pCmd, bool* pbSendPacket);
 
     void NoRecoil(CCSPlayer* pLocal, CUserCmd* pCmd);
+
+    float Hitchance(CCSPlayer* pLocal, CBaseCombatWeapon* pWeapon, const QAngle_t& angShoot, CCSPlayer* pTarget, int iTargetHitbox);
 }
