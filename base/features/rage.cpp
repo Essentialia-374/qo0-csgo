@@ -196,7 +196,7 @@ std::vector<Vector_t> RAGE::MultiPoints(CCSPlayer* pTarget, RageHitbox_t iHitbox
     if (!pHdr)
         return pts;
 
-    const mstudiobbox_t* pBox = pHdr->pHitbox(static_cast<int>(iHitbox), pTarget->GetHitboxSet());
+    const mstudiobbox_t* pBox = pHdr->GetHitbox(static_cast<int>(iHitbox), pTarget->GetHitboxSet());
     if (!pBox)
         return pts;
 
